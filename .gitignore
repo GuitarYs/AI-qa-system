@@ -1,0 +1,19 @@
+# 数据 / 运行时
+data/
+*.db
+*.sqlite3
+__pycache__/
+*.pyc
+*.log
+_out.txt
+_server.log
+
+# 前端
+frontend/node_modules/
+frontend/dist/
+
+# 环境
+.env
+
+# 本地开发工具配置（含本机路径，勿提交）
+.claude/
