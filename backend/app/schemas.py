@@ -49,6 +49,7 @@ class ChatResponse(BaseModel):
 # ---- 反馈 ----
 class FeedbackRequest(BaseModel):
     message_id: int
+    conversation_id: Optional[int] = None
     kind: str  # up / down
 
 
@@ -63,6 +64,10 @@ class TicketStatus(BaseModel):
 
 class TicketSatisfaction(BaseModel):
     satisfaction: int  # 1-5
+
+
+class TicketResolution(BaseModel):
+    resolution: str = ""  # 人工客服处理意见/回复
 
 
 # ---- 看板 ----

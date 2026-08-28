@@ -7,6 +7,8 @@
 
 维护多轮上下文：生成时把最近几轮对话一并喂给 LLM。
 """
+import re
+
 from sqlalchemy.orm import Session
 
 from . import config, llm, rag, intent
@@ -45,7 +47,6 @@ def _lookup_order(db: Session, user_id: int, message: str) -> list[Order]:
     if not orders:
         return []
     # 尝试从消息里提取订单号
-    import re
     nos = re.findall(r"[A-Za-z0-9]{6,20}", message)
     if nos:
         for n in nos:
@@ -55,10 +56,57 @@ def _lookup_order(db: Session, user_id: int, message: str) -> list[Order]:
     return orders
 
 
-def _order_reply(db: Session, user_id: int, message: str) -> str:
+_CN_NUM = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10}
+
+
+def _prev_assistant_intent(db: Session, conversation_id: int) -> str | None:
+    """最近一条 assistant 消息的意图，用于多轮上下文判断。"""
+    m = (db.query(Message)
+         .filter(Message.conversation_id == conversation_id, Message.role == "assistant")
+         .order_by(Message.id.desc()).first())
+    return m.intent if m else None
+
+
+def _parse_order_select(message: str) -> int | None:
+    """从指代短句里解析「选第几笔订单」（从 1 开始），解析不出返回 None。
+
+    例：「第一个吧」→ 1；「第二笔」→ 2；「就第一个」→ 1。
+    """
+    m = re.search(r"第\s*([一二三四五六七八九十\d]+)\s*[个笔单张]?", message)
+    if not m:
+        return None
+    tok = m.group(1)
+    if tok.isdigit():
+        return int(tok)
+    return _CN_NUM.get(tok)
+
+
+# 对上一条订单问询的肯定/接续回应词（如「好的」「嗯」「可以」）
+_ORDER_ACK = {"好的", "好", "好呀", "好呢", "好哦", "好嘞", "好滴", "嗯", "嗯嗯",
+              "是", "是的", "对", "对的", "可以", "行", "ok", "okay"}
+
+
+def _is_order_ack(message: str) -> bool:
+    """判断是否为对上一条订单问询的纯肯定/接续回应。
+
+    例：「好的」→ True；「好的，第一个吧」→ 先由 _parse_order_select 处理；「好的，我想退款」→ False。
+    只匹配纯肯定词，避免把带新诉求的话误判为接续。
+    """
+    core = message.strip().strip("。！!？?~～ .,，").lower()
+    core = core.rstrip("吧呢啊呀哦哈滴啦了")
+    return core in _ORDER_ACK
+
+
+def _order_reply(db: Session, user_id: int, message: str, select: int | None = None) -> str:
     orders = _lookup_order(db, user_id, message)
     if not orders:
         return "在业务系统中没有查询到您名下的订单记录，如需进一步核实，可以转接人工客服帮您查。"
+    # 多轮续问：用户只回了「好的」这类肯定词、未指明哪一笔 → 简单确认并回归正常接待
+    if select is None and _is_order_ack(message):
+        return "好的，如还有其他订单问题或任何需要帮助的地方，请随时告诉我。"
+    # 多轮续问：用户明确选了第几笔（如「第一个吧」），只回那一笔
+    if select is not None:
+        orders = [orders[select - 1]] if 1 <= select <= len(orders) else orders[:1]
     lines = []
     for o in orders[:5]:
         lines.append(f"订单 {o.order_no}｜{o.product}｜金额 ￥{o.amount:.2f}｜状态：{o.status}")
@@ -97,9 +145,18 @@ def handle_chat(db: Session, user_id: int, message: str,
     # 1) 意图识别
     it = intent.detect_intent(message)
 
+    # 1.5) 多轮上下文：上一轮 AI 在列订单、本轮是指代选择（「第一个吧」）或肯定接续（「好的」）
+    #      → 续走订单分支，避免把「好的」当成新问题走 RAG 导致低置信转人工。
+    #      仅当本轮不含明确转人工信号（投诉/人工等）时才覆盖，避免误吞「我要投诉」。
+    select = _parse_order_select(message)
+    if it != "order" and (select is not None or _is_order_ack(message)) \
+            and _prev_assistant_intent(db, conv.id) == "order" \
+            and not any(kw in message for kw in config.INTENT_KEYWORDS["transfer"]):
+        it = "order"
+
     # 2) 分支处理
     if it == "order":
-        reply = _order_reply(db, user_id, message)
+        reply = _order_reply(db, user_id, message, select=select)
         am = Message(conversation_id=conv.id, role="assistant", content=reply,
                      intent="order", confidence=1.0, sources=[])
         db.add(am)

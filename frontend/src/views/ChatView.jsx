@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { sendChat, sendFeedback, listUsers } from '../api.js'
+import { sendChat, sendFeedback, listUsers, getMessages } from '../api.js'
 
 export default function ChatView() {
   const [users, setUsers] = useState([])
-  const [userId, setUserId] = useState(1)
-  const [conversationId, setConversationId] = useState(null)
+  const [userId, setUserId] = useState(() => Number(localStorage.getItem('kefu_user_id')) || 1)
+  const [conversationId, setConversationId] = useState(() => localStorage.getItem('kefu_conversation_id') || null)
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -15,8 +15,27 @@ export default function ChatView() {
     listUsers().then(us => {
       const customers = us.filter(u => u.role === 'customer')
       setUsers(customers)
-      if (customers.length) setUserId(customers[0].id)
+      const savedUid = Number(localStorage.getItem('kefu_user_id'))
+      if (customers.some(u => u.id === savedUid)) setUserId(savedUid)
+      else if (customers.length) setUserId(customers[0].id)
     })
+    // 恢复上次会话历史（切换页面不丢对话）
+    const savedConv = localStorage.getItem('kefu_conversation_id')
+    if (savedConv) {
+      getMessages(Number(savedConv)).then(r => {
+        if (r && r.messages && r.messages.length) {
+          setMessages(r.messages.map(m => ({
+            role: m.role, content: m.content, intent: m.intent,
+            confidence: m.confidence, low_confidence: m.low_confidence,
+            sources: m.sources || [], id: m.id,
+          })))
+          setConversationId(r.conversation_id)
+        } else {
+          localStorage.removeItem('kefu_conversation_id')
+          setConversationId(null)
+        }
+      }).catch(() => {})
+    }
   }, [])
 
   useEffect(() => {
@@ -24,6 +43,11 @@ export default function ChatView() {
   }, [messages])
 
   const append = (m) => setMessages(prev => [...prev, m])
+
+  const persistConversation = (id) => {
+    if (id) localStorage.setItem('kefu_conversation_id', String(id))
+    else localStorage.removeItem('kefu_conversation_id')
+  }
 
   async function handleSend() {
     const text = input.trim()
@@ -34,6 +58,7 @@ export default function ChatView() {
     try {
       const r = await sendChat({ message: text, user_id: userId, conversation_id: conversationId })
       setConversationId(r.conversation_id)
+      persistConversation(r.conversation_id)
       append({
         role: 'assistant',
         content: r.reply,
@@ -68,12 +93,12 @@ export default function ChatView() {
         <select
           style={{ width: 180 }}
           value={userId}
-          onChange={e => { setUserId(Number(e.target.value)); setConversationId(null); setMessages([]); setFeedback({}) }}
+          onChange={e => { const uid = Number(e.target.value); setUserId(uid); localStorage.setItem('kefu_user_id', String(uid)); setConversationId(null); persistConversation(null); setMessages([]); setFeedback({}) }}
         >
           {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
         </select>
         <span className="spacer" />
-        <button className="btn sm" onClick={() => { setConversationId(null); setMessages([]); setFeedback({}) }}>
+        <button className="btn sm" onClick={() => { setConversationId(null); persistConversation(null); setMessages([]); setFeedback({}) }}>
           新会话
         </button>
       </div>

@@ -64,16 +64,41 @@ def get_dashboard(db: Session, start: str | None = None, end: str | None = None)
     avg_resp = round(sum(resp_seconds) / len(resp_seconds), 1) if resp_seconds else 0.0
 
     # ---- 满意度 ----
-    up = (db.query(func.count(Feedback.id))
-          .filter(Feedback.kind == "up",
-                  Feedback.created_at >= start_dt, Feedback.created_at <= end_dt).scalar() or 0)
-    down = (db.query(func.count(Feedback.id))
-            .filter(Feedback.kind == "down",
-                    Feedback.created_at >= start_dt, Feedback.created_at <= end_dt).scalar() or 0)
+    fbs = (db.query(Feedback)
+           .filter(Feedback.created_at >= start_dt, Feedback.created_at <= end_dt).all())
+    up = sum(1 for f in fbs if f.kind == "up")
+    down = sum(1 for f in fbs if f.kind == "down")
     tickets_in_range = (db.query(Ticket)
                         .filter(Ticket.created_at >= start_dt, Ticket.created_at <= end_dt).all())
     sats = [t.satisfaction for t in tickets_in_range if t.satisfaction]
     avg_sat = round(sum(sats) / len(sats), 1) if sats else 0.0
+
+    # 点赞/点踩按天序列（柱状图用）
+    fb_up_day = {d: 0 for d in day_counts}
+    fb_down_day = {d: 0 for d in day_counts}
+    for f in fbs:
+        key = f.created_at.date().isoformat()
+        if key in fb_up_day:
+            if f.kind == "up":
+                fb_up_day[key] += 1
+            else:
+                fb_down_day[key] += 1
+    feedback_trend = [{"date": d, "up": fb_up_day[d], "down": fb_down_day[d]} for d in day_counts]
+
+    # 工单满意度按天序列（趋势线用）
+    sat_day = {}
+    for t in tickets_in_range:
+        if t.satisfaction:
+            key = t.created_at.date().isoformat()
+            sat_day.setdefault(key, []).append(t.satisfaction)
+    satisfaction_trend = []
+    for d in day_counts:
+        scores = sat_day.get(d, [])
+        satisfaction_trend.append({
+            "date": d,
+            "score": round(sum(scores) / len(scores), 1) if scores else None,
+            "count": len(scores),
+        })
 
     # ---- 热门问题 Top10（AI 聚类）----
     user_qs = [m.content for m in msgs if m.role == "user"]
@@ -112,7 +137,9 @@ def get_dashboard(db: Session, start: str | None = None, end: str | None = None)
         "transferred_count": transferred,
         "avg_response_seconds": avg_resp,
         "feedback": {"up": up, "down": down, "total": up + down},
+        "feedback_trend": feedback_trend,
         "ticket_avg_satisfaction": avg_sat,
+        "satisfaction_trend": satisfaction_trend,
         "trend": [{"date": d, "count": day_counts[d]} for d in day_counts],
         "hot_topics": hot_topics,
         "gap_analysis": gap_analysis,

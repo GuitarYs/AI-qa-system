@@ -1,4 +1,4 @@
-"""RAG 检索：query 向量化 → FAISS 召回 → 按 active 分块过滤 → 返回带来源的候选。"""
+"""RAG 检索：query 向量化 → chromadb 召回 → 按 active 分块过滤 → 返回带来源的候选。"""
 from sqlalchemy.orm import Session
 
 from . import config, embeddings, vector_store
@@ -18,15 +18,16 @@ def retrieve(db: Session, query: str, top_k: int | None = None):
     if not ids:
         return []
 
-    # 一次查出所有候选分块及其所属文档
-    chunks = db.query(Chunk).filter(Chunk.index_id.in_(ids)).all()
-    chunk_by_idx = {c.index_id: c for c in chunks}
+    # 向量 id 即分块主键 id（str(Chunk.id)），转回 int 一次查出所有候选分块及其文档
+    chunk_ids = [int(i) for i in ids]
+    chunks = db.query(Chunk).filter(Chunk.id.in_(chunk_ids)).all()
+    chunk_by_id = {c.id: c for c in chunks}
     doc_ids = {c.document_id for c in chunks}
     docs = {d.id: d for d in db.query(Document).filter(Document.id.in_(doc_ids)).all()}
 
     results = []
-    for idx, score in zip(ids, scores):
-        c = chunk_by_idx.get(idx)
+    for cid, score in zip(chunk_ids, scores):
+        c = chunk_by_id.get(cid)
         if c is None or not c.active:
             continue  # 旧版本分块，跳过
         doc = docs.get(c.document_id)

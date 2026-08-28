@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import {
-  listTickets, getTicket, listUsers, assignTicket, setTicketStatus, suggestReply, setSatisfaction,
+  listTickets, getTicket, listUsers, assignTicket, setTicketStatus, suggestReply, setSatisfaction, saveResolution,
 } from '../api.js'
 
 const STATUS = [
@@ -17,6 +17,8 @@ export default function Tickets() {
   const [detail, setDetail] = useState(null)
   const [suggestion, setSuggestion] = useState('')
   const [suggestLoading, setSuggestLoading] = useState(false)
+  const [resolution, setResolution] = useState('')
+  const [saving, setSaving] = useState(false)
 
   async function reload() {
     const ts = await listTickets()
@@ -33,6 +35,7 @@ export default function Tickets() {
     const d = await getTicket(id)
     setDetail(d)
     setSuggestion('')
+    setResolution(d.resolution || '')
   }
 
   async function doAssign(id, agentId) {
@@ -51,7 +54,17 @@ export default function Tickets() {
     try {
       const r = await suggestReply(id)
       setSuggestion(r.suggestion)
+      // AI 建议先填入处理意见框，人工可再编辑
+      setResolution(r.suggestion)
     } finally { setSuggestLoading(false) }
+  }
+  async function doSaveResolution(id) {
+    setSaving(true)
+    try {
+      const d = await saveResolution(id, resolution)
+      setDetail(d)
+      setResolution(d.resolution || '')
+    } finally { setSaving(false) }
   }
   async function doSatisfaction(id, val) {
     await setSatisfaction(id, val)
@@ -126,7 +139,25 @@ export default function Tickets() {
               <button className="btn" onClick={() => doSuggest(detail.id)} disabled={suggestLoading}>
                 {suggestLoading ? 'AI 生成中…' : '✨ AI 建议回复（知识库 + 历史相似工单）'}
               </button>
-              {suggestion && <div className="card mt" style={{ background: '#f0f7ff' }}>{suggestion}</div>}
+              {suggestion && (
+                <div className="card mt" style={{ background: '#f0f7ff' }}>{suggestion}</div>
+              )}
+            </div>
+
+            <div className="field">
+              <label>人工处理意见（可编辑后保存）</label>
+              <textarea
+                rows={6}
+                value={resolution}
+                onChange={e => setResolution(e.target.value)}
+                placeholder="可先点上方「AI 建议回复」生成草稿，再人工编辑，最后保存为处理意见"
+              />
+              <div className="row mt" style={{ gap: 6 }}>
+                <button className="btn primary" onClick={() => doSaveResolution(detail.id)} disabled={saving}>
+                  {saving ? '保存中…' : '保存处理意见'}
+                </button>
+                {detail.resolution && <span className="hint">已保存</span>}
+              </div>
             </div>
 
             <div className="field">

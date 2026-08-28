@@ -17,7 +17,7 @@ start.bat
 
 > 依赖两个真实 API（已在 shell 环境变量中配置好）：
 > - `DEEPSEEK_API_KEY` —— LLM（DeepSeek `deepseek-chat`）
-> - `DASHSCOPE_API_KEY` —— 向量嵌入（DashScope `text-embedding-v3`）
+> - `DASHSCOPE_API_KEY` —— 向量嵌入（DashScope `text-embedding-v4`）
 
 ### 方式 B：docker-compose（本机未装 docker，未实测）
 
@@ -44,7 +44,7 @@ cd backend && python run.py
 | --- | --- | --- |
 | **① 知识库管理** | 文档上传/增删改查，自动分块 + 向量化入库，版本历史追溯 | 管理后台 → 知识库管理 |
 | **② 对话引擎** | RAG 检索 + LLM 生成（带来源引用）、置信度判断 + 防幻觉、意图识别（咨询/投诉/查订单）、转人工、多轮上下文 | 用户端 |
-| **③ 工单系统** | 转人工自动生成工单（AI 摘要 + 优先级）、分配、状态流转、AI 建议回复（知识库 + 历史相似工单） | 管理后台 → 工单系统 |
+| **③ 工单系统** | 转人工自动生成工单（AI 摘要 + 优先级）、分配、状态流转、AI 建议回复（知识库 + 历史相似工单）、人工处理意见保存 | 管理后台 → 工单系统 |
 | **④ 数据分析看板** | 今日会话量、AI 解决率、平均响应时长、热门问题 Top10（AI 聚类）、知识库缺口分析、满意度，时间范围筛选 + 可视化 | 管理后台 → 数据看板 |
 
 ---
@@ -56,8 +56,8 @@ cd backend && python run.py
 | 前端 | React 18 + Vite + Recharts | 单页应用，聊天窗口 + 管理后台双界面 |
 | 后端 | Python FastAPI + SQLAlchemy | 异步、类型友好、开发快 |
 | 关系库 | SQLite | 单机跑通，零部署；ORM 可平滑切 MySQL |
-| 向量库 | FAISS（内存态） | 已装、无需额外服务；启动时从 DB 分块重建，规避 Windows 中文路径写盘问题 |
-| 嵌入 | DashScope `text-embedding-v3` | 中文效果好，OpenAI 兼容接口，无需本地模型 |
+| 向量库 | chromadb（持久化） | 向量+文本落盘到 ~/.kefu_data/chroma，重启不丢、无需重建；更新/删除文档时同步删向量，与 DB 严格一致 |
+| 嵌入 | DashScope `text-embedding-v4` | 中文效果好，OpenAI 兼容接口，无需本地模型 |
 | LLM | DeepSeek `deepseek-chat` | OpenAI 兼容，性价比高，已实测连通 |
 
 > **防幻觉核心**：召回 Top-1 相似度 < 阈值（默认 0.6）时，系统诚实回答「不知道」并转人工，**绝不硬编知识库外的答案**。
@@ -75,7 +75,7 @@ cd backend && python run.py
 │   │   ├── models.py        # ORM：用户/会话/消息/工单/文档/版本/分块/反馈/订单
 │   │   ├── chunking.py      # FAQ 感知分块
 │   │   ├── embeddings.py    # DashScope 嵌入封装
-│   │   ├── vector_store.py  # FAISS 封装
+│   │   ├── vector_store.py  # chromadb 封装
 │   │   ├── rag.py           # RAG 检索（active 过滤 + 置信度）
 │   │   ├── llm.py           # DeepSeek 客户端
 │   │   ├── intent.py        # 意图识别（规则 + LLM）
@@ -102,10 +102,10 @@ cd backend && python run.py
 - [x] AI 真用：RAG / 意图识别 / 聚类 / 建议回复均真调 DeepSeek + DashScope，无 mock
 - [x] 防幻觉：超纲问题（如问股票代码）Top-1 < 0.6 → 诚实转人工，不硬编
 - [x] 数据真实：看板数字全部由真实对话/工单表实时统计（含 10 历史工单 + 8 历史会话种子）
-- [x] 种子数据：4 知识库（60 条 FAQ）+ 10 历史工单 + 5 用户 + 6 订单
+- [x] 种子数据：4 知识库（60 条 FAQ）+ 10 历史工单 + 7 用户（5 客户）+ 10 订单
 
 ---
 
 ## 六、种子数据说明
 
-首次启动自动播种：5 用户（3 客户 + 2 客服）、4 篇知识库（共 60 条 FAQ）、6 个订单、10 张历史工单（覆盖待处理/处理中/已解决/已关闭、含满意度）、8 段历史 AI 已解决会话（分布在近 7 天，供看板趋势/聚类/缺口分析展示）。
+首次启动自动播种：7 用户（5 客户 + 2 客服）、4 篇知识库（共 60 条 FAQ）、10 个订单（每位客户 2 单）、10 张历史工单（覆盖待处理/处理中/已解决/已关闭、含满意度）、8 段历史 AI 已解决会话（分布在近 7 天，供看板趋势/聚类/缺口分析展示）。

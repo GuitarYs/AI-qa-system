@@ -4,5 +4,6 @@ sqlalchemy
 pydantic
 httpx
 numpy
-faiss-cpu
+chromadb
 python-multipart
+pypdf

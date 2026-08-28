@@ -6,31 +6,39 @@ from .models import Document, DocumentVersion, Chunk
 
 
 def _index_chunks(db: Session, doc: Document, content: str, version: int):
-    """把文档内容分块、向量化、写入 FAISS，并在 DB 记录分块。"""
+    """把文档内容分块、向量化、写入 chromadb，并在 DB 记录分块。"""
     blocks = chunking.chunk_markdown(content)
     if not blocks:
         return
+    # 先落库分块拿到自增主键 id，作为向量 id（str(chunk.id)）
+    chunk_objs = []
+    for b in blocks:
+        c = Chunk(document_id=doc.id, version=version, chunk_index=0,
+                  text=b["text"], source_ref=b["source_ref"], active=True)
+        db.add(c)
+        db.flush()  # 拿到 c.id
+        chunk_objs.append(c)
     texts = [b["text"] for b in blocks]
     vecs = embeddings.embed_texts(texts)
-    index_ids = vector_store.add_vectors(vecs)
-    for b, idx in zip(blocks, index_ids):
-        db.add(Chunk(document_id=doc.id, version=version, chunk_index=0,
-                     text=b["text"], source_ref=b["source_ref"],
-                     index_id=idx, active=True))
+    ids = [str(c.id) for c in chunk_objs]
+    vector_store.add_vectors(vecs, ids=ids, documents=texts,
+                             metadatas=[{"chunk_id": c.id, "doc_id": doc.id, "version": version}
+                                        for c in chunk_objs])
     db.commit()
 
 
 def rebuild_index(db: Session):
-    """从 DB 中所有 active 分块重建 FAISS 索引（启动时调用，保证索引与 DB 一致）。"""
+    """从 DB 中所有 active 分块重建 chromadb 索引（启动时调用，保证索引与 DB 一致）。"""
     chunks = db.query(Chunk).filter(Chunk.active.is_(True)).order_by(Chunk.id).all()
     vector_store.reset()
     if not chunks:
         return
     texts = [c.text for c in chunks]
     vecs = embeddings.embed_texts(texts)
-    index_ids = vector_store.add_vectors(vecs)
-    for c, idx in zip(chunks, index_ids):
-        c.index_id = idx
+    ids = [str(c.id) for c in chunks]
+    vector_store.add_vectors(vecs, ids=ids, documents=texts,
+                             metadatas=[{"chunk_id": c.id, "doc_id": c.document_id, "version": c.version}
+                                        for c in chunks])
     db.commit()
 
 
@@ -55,11 +63,13 @@ def update_document(db: Session, doc: Document, title=None, category=None,
     if category is not None:
         doc.category = category
     if content is not None and content != doc.content:
-        # 旧分块失效
+        # 旧分块失效，并同步从向量库删除旧向量
+        old_ids = [str(c.id) for c in doc.chunks if c.active]
         for c in doc.chunks:
             if c.active:
                 c.active = False
         db.commit()
+        vector_store.delete(old_ids)
         doc.content = content
         doc.current_version = new_version
         db.add(DocumentVersion(document_id=doc.id, version=new_version,
@@ -73,6 +83,7 @@ def update_document(db: Session, doc: Document, title=None, category=None,
 
 
 def delete_document(db: Session, doc: Document):
+    vector_store.delete([str(c.id) for c in doc.chunks])
     for c in doc.chunks:
         c.active = False
     db.commit()

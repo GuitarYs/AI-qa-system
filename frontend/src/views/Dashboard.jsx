@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  Legend, PieChart, Pie, Cell,
+  Legend, PieChart, Pie, Cell, LineChart, Line,
 } from 'recharts'
 import { getDashboard } from '../api.js'
 
@@ -135,6 +135,37 @@ export default function Dashboard() {
                   <div className="small dim">共 {data.ticket_total} 张工单</div>
                 </>
               ) : <div className="dim">暂无工单</div>}
+            </div>
+          </div>
+
+          {/* 满意度反馈（点赞/点踩 + 工单满意度，按时间范围可视化） */}
+          <div className="grid mt" style={{ gridTemplateColumns: '1fr 1fr', alignItems: 'stretch' }}>
+            <div className="card">
+              <div className="section-title">👍 点赞 / 点踩反馈（按天）</div>
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={data.feedback_trend}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#eef0f3" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="up" name="点赞" fill="#16a34a" radius={[4, 4, 0, 0]} maxBarSize={24} />
+                  <Bar dataKey="down" name="点踩" fill="#dc2626" radius={[4, 4, 0, 0]} maxBarSize={24} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="card">
+              <div className="section-title">⭐ 工单满意度评分（按天）</div>
+              <ResponsiveContainer width="100%" height={260}>
+                <LineChart data={data.satisfaction_trend}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#eef0f3" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                  <YAxis domain={[0, 5]} tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Line type="monotone" dataKey="score" name="满意度" stroke="#2563eb" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                </LineChart>
+              </ResponsiveContainer>
             </div>
           </div>
 

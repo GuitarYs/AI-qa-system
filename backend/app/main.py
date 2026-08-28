@@ -1,4 +1,5 @@
 """FastAPI 入口：API 路由 + 静态前端托管 + 启动播种。"""
+from io import BytesIO
 from pathlib import Path
 
 from fastapi import FastAPI, Depends, UploadFile, File, Form, HTTPException
@@ -20,15 +21,26 @@ app.add_middleware(
 )
 
 
+def _migrate():
+    """轻量迁移：为旧库补齐新增列（SQLite 的 ALTER TABLE ADD COLUMN）。"""
+    from sqlalchemy import text
+    with engine.begin() as conn:
+        # tickets.resolution：人工客服处理意见（后加功能，老库补列）
+        cols = [r[1] for r in conn.execute(text("PRAGMA table_info(tickets)"))]
+        if "resolution" not in cols:
+            conn.execute(text("ALTER TABLE tickets ADD COLUMN resolution TEXT DEFAULT ''"))
+
+
 @app.on_event("startup")
 def on_startup():
     Base.metadata.create_all(bind=engine)
+    _migrate()
     from . import seed
     db = SessionLocal()
     try:
         seed.seed_all(db)
-        # 若内存索引与 DB 分块数不一致（如重启后），从 DB 重建索引。
-        # 网络异常时重建失败不阻塞启动（此时 RAG 会退化为转人工）。
+        # chroma 向量库已持久化，正常重启无需重建；仅当向量库与 DB 有效分块数不一致
+        # （如首次迁移、向量库被删）时才从 DB 重建。网络异常时重建失败不阻塞启动。
         active_count = db.query(Chunk).filter(Chunk.active.is_(True)).count()
         if vector_store.size() != active_count:
             try:
@@ -131,15 +143,32 @@ def restore_document(doc_id: int, version: int, db: Session = Depends(get_db)):
     return kb_service.doc_to_dict(doc, include_versions=True)
 
 
+def _extract_pdf_text(raw: bytes) -> str:
+    """提取 PDF 正文：把 PDF 各页文本拼成纯文本返回，供后续与 .md/.txt 一样分块入库。"""
+    try:
+        from pypdf import PdfReader  # 延迟导入，避免未安装 pypdf 时影响其他功能启动
+        reader = PdfReader(BytesIO(raw))
+        return "\n".join((page.extract_text() or "") for page in reader.pages).strip()
+    except Exception as e:
+        print(f"[kb] PDF 文本提取失败：{e}")
+        return ""
+
+
 @app.post("/api/kb/upload")
 async def upload_document(file: UploadFile = File(...),
                           category: str = Form("FAQ"),
                           db: Session = Depends(get_db)):
     raw = await file.read()
-    try:
-        content = raw.decode("utf-8")
-    except UnicodeDecodeError:
-        content = raw.decode("gbk", errors="ignore")
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix == ".pdf":
+        content = _extract_pdf_text(raw)
+        if not content:
+            raise HTTPException(400, "PDF 无法提取到文本内容（可能是扫描件或加密文档）")
+    else:
+        try:
+            content = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            content = raw.decode("gbk", errors="ignore")
     title = Path(file.filename).stem
     doc = kb_service.create_document(db, title, category, content, note="上传文档")
     return kb_service.doc_to_dict(doc, include_versions=True)
@@ -200,6 +229,17 @@ def set_satisfaction(ticket_id: int, req: schemas.TicketSatisfaction,
         raise HTTPException(404, "工单不存在")
     t.satisfaction = req.satisfaction
     t.status = "closed"
+    db.commit()
+    return ticket_service.ticket_to_dict(t)
+
+
+@app.put("/api/tickets/{ticket_id}/resolution")
+def save_resolution(ticket_id: int, req: schemas.TicketResolution,
+                    db: Session = Depends(get_db)):
+    t = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+    if t is None:
+        raise HTTPException(404, "工单不存在")
+    t.resolution = req.resolution
     db.commit()
     return ticket_service.ticket_to_dict(t)
 

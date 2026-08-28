@@ -81,6 +81,10 @@ export async function setSatisfaction(id, satisfaction) {
   const { data } = await api.post(`/api/tickets/${id}/satisfaction`, { satisfaction })
   return data
 }
+export async function saveResolution(id, resolution) {
+  const { data } = await api.put(`/api/tickets/${id}/resolution`, { resolution })
+  return data
+}
 
 export async function listUsers() {
   const { data } = await api.get('/api/users')

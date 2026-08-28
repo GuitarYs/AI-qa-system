@@ -1,7 +1,7 @@
-"""种子数据：5 用户 + 4 知识库 + 订单 + 10 历史工单 + 若干历史会话。
+"""种子数据：7 用户（5 客户 + 2 客服）+ 4 知识库 + 订单 + 10 历史工单 + 若干历史会话。
 
 历史工单与会话写入真实数据表，供看板按时间统计、供「相似工单/建议回复」参考，
-满足「≥20 FAQ + 10 历史工单 + 5 用户」的验收要求。
+满足「≥20 FAQ + 10 历史工单 + 5 用户」的验收要求（用户端下拉展示 5 个 customer）。
 """
 from datetime import datetime, timedelta
 
@@ -17,6 +17,8 @@ USERS = [
     {"name": "张三", "email": "zhangsan@example.com", "role": "customer"},
     {"name": "李四", "email": "lisi@example.com", "role": "customer"},
     {"name": "王五", "email": "wangwu@example.com", "role": "customer"},
+    {"name": "赵六", "email": "zhaoliu@example.com", "role": "customer"},
+    {"name": "孙七", "email": "sunqi@example.com", "role": "customer"},
     {"name": "客服小李", "email": "agent-li@cloudwork.com", "role": "agent"},
     {"name": "客服小陈", "email": "agent-chen@cloudwork.com", "role": "agent"},
 ]
@@ -28,6 +30,10 @@ ORDERS = [
     {"order_no": "CW20260812004", "user": "李四", "product": "专业版月付", "amount": 267.0, "status": "已完成"},
     {"order_no": "CW20260815005", "user": "王五", "product": "专业版年付", "amount": 1068.0, "status": "待发货"},
     {"order_no": "CW20260818006", "user": "王五", "product": "基础版月付", "amount": 39.0, "status": "已完成"},
+    {"order_no": "CW20260820007", "user": "赵六", "product": "企业版月付", "amount": 1990.0, "status": "已发货"},
+    {"order_no": "CW20260822008", "user": "赵六", "product": "基础版年付", "amount": 468.0, "status": "已完成"},
+    {"order_no": "CW20260824009", "user": "孙七", "product": "专业版月付", "amount": 267.0, "status": "待发货"},
+    {"order_no": "CW20260825010", "user": "孙七", "product": "专业版年付", "amount": 1068.0, "status": "已完成"},
 ]
 
 # 历史工单：每条含对话历史（用户消息 + 转人工答复）与工单元信息

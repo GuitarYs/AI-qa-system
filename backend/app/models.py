@@ -56,7 +56,7 @@ class DocumentVersion(Base):
 
 
 class Chunk(Base):
-    """文档分块。向量存在 FAISS（按 index_id 对应），文本与元数据存这里。"""
+    """文档分块。向量存在 chromadb（向量 id = str(Chunk.id)），文本与元数据存这里。"""
     __tablename__ = "chunks"
     id = Column(Integer, primary_key=True)
     document_id = Column(Integer, ForeignKey("documents.id"), nullable=False)
@@ -64,7 +64,7 @@ class Chunk(Base):
     chunk_index = Column(Integer, nullable=False)
     text = Column(Text, nullable=False)
     source_ref = Column(String(256), default="")  # 如「产品套餐 Q3」
-    index_id = Column(Integer, nullable=False)    # FAISS 中的行号（0-based）
+    index_id = Column(Integer, default=0)         # 已废弃（原 FAISS 行号），保留字段兼容旧库
     active = Column(Boolean, default=True)        # 旧版本分块标记为 False
     created_at = Column(DateTime, default=now)
 
@@ -115,6 +115,7 @@ class Ticket(Base):
     status = Column(String(16), default="pending")
     category = Column(String(64), default="")      # AI 聚类得到的类别（缺口分析用）
     satisfaction = Column(Integer, nullable=True)  # 1-5，解决后满意度
+    resolution = Column(Text, default="")          # 人工客服的处理意见/回复（可编辑保存）
     created_at = Column(DateTime, default=now)
     updated_at = Column(DateTime, default=now, onupdate=now)
 

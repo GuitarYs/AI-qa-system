@@ -1,9 +1,10 @@
 """嵌入封装。调用 DashScope text-embedding-v3（OpenAI 兼容接口），返回 L2 归一化向量。
 
-归一化后向量内积 = 余弦相似度，与 FAISS IndexFlatIP 配合使用。
+归一化后向量内积 = 余弦相似度，与 chromadb 的 cosine 空间配合使用。
 """
 import httpx
 import numpy as np
+from concurrent.futures import ThreadPoolExecutor
 
 from . import config
 
@@ -37,11 +38,13 @@ def embed_texts(texts: list[str]) -> np.ndarray:
     """批量编码，返回归一化后的 float32 向量。"""
     if not texts:
         return np.zeros((0, config.EMBED_DIM), dtype="float32")
-    # DashScope 单次最多 ~10 条文本，这里分批稳妥
-    out = []
+    # DashScope 单次最多 ~10 条文本，分批并发调用以提速（串行是看板慢的主因）
     batch = 10
-    for i in range(0, len(texts), batch):
-        out.extend(_call_embed(texts[i:i + batch]))
+    batches = [texts[i:i + batch] for i in range(0, len(texts), batch)]
+    out = []
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        for part in ex.map(_call_embed, batches):
+            out.extend(part)
     return _normalize(np.array(out, dtype="float32"))
 
 

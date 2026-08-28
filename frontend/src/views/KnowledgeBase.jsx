@@ -73,8 +73,8 @@ export default function KnowledgeBase() {
     <div>
       <div className="toolbar">
         <button className="btn primary" onClick={startNew}>+ 新建文档</button>
-        <button className="btn" onClick={() => fileRef.current?.click()}>上传文件（.md / .txt）</button>
-        <input ref={fileRef} type="file" accept=".md,.txt,.markdown" style={{ display: 'none' }} onChange={upload} />
+        <button className="btn" onClick={() => fileRef.current?.click()}>上传文件（.md / .txt / .pdf）</button>
+        <input ref={fileRef} type="file" accept=".md,.txt,.markdown,.pdf" style={{ display: 'none' }} onChange={upload} />
         <span className="spacer" />
         <span className="hint">共 {docs.length} 篇文档 · 上传后自动分块、向量化入库</span>
       </div>

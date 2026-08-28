@@ -120,6 +120,7 @@ def ticket_to_dict(t: Ticket) -> dict:
         "status": t.status,
         "category": t.category,
         "satisfaction": t.satisfaction,
+        "resolution": t.resolution or "",
         "created_at": t.created_at.isoformat() if t.created_at else "",
         "updated_at": t.updated_at.isoformat() if t.updated_at else "",
     }

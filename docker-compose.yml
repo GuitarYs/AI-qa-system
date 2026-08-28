@@ -1,5 +1,5 @@
 # 「docker-compose up」一键启动（若本机装了 docker）。
-# 单容器承载：FastAPI 后端 + SQLite + 内存 FAISS 向量库 + 前端静态。
+# 单容器承载：FastAPI 后端 + SQLite + chromadb 持久化向量库 + 前端静态。
 # 需要先导出两个 API key（或写进 .env，compose 会自动读取）：
 #   DEEPSEEK_API_KEY / DASHSCOPE_API_KEY
 services:

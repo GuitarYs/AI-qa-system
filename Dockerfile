@@ -20,7 +20,7 @@ COPY backend/ ./backend/
 COPY seed_data/ ./seed_data/
 COPY --from=frontend /fe/dist ./frontend/dist
 
-# 数据目录（SQLite + 上传文件）；向量库 FAISS 为内存态，启动时从 DB 重建
+# 数据目录（SQLite + chromadb 向量库 + 上传文件）；chromadb 持久化到本目录，重启不丢
 ENV KEFU_DATA_DIR=/app/data
 EXPOSE 8000
 CMD ["python", "backend/run.py"]
