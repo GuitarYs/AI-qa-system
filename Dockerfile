@@ -1,6 +1,7 @@
 # 多阶段构建：前端 Vite 构建 → 后端 FastAPI 单容器托管全部（前端静态 + API）
-# 说明：本机无 docker，此文件为「docker-compose 优先」的交付，未在本机实测；
-#       本机推荐直接双击 start.bat 一键启动。
+# 说明：本windows pc无 docker环境，此文件在自己的Rocky Linux 虚拟机上实测已经跑通；
+#    windows推荐直接双击 start.bat 一键启动。
+# linux可用docker启动。
 
 # ---------- 前端构建 ----------
 FROM node:20-alpine AS frontend
