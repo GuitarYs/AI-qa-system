@@ -19,13 +19,20 @@ start.bat
 > - `DEEPSEEK_API_KEY` —— LLM（DeepSeek `deepseek-chat`）
 > - `DASHSCOPE_API_KEY` —— 向量嵌入（DashScope `text-embedding-v4`）
 
-### 方式 B：docker-compose（本机未装 docker，未实测）
+### 方式 B：docker-compose（已在 Rocky Linux 9.4 虚拟机实测）
 
 ```bash
 export DEEPSEEK_API_KEY=sk-xxxx
 export DASHSCOPE_API_KEY=sk-xxxx
-docker compose up --build
+docker compose up -d --build
 # 打开 http://localhost:8000
+```
+
+也可直接使用仓库内的一键脚本：
+
+```bash
+./docker-start.sh       # Linux / macOS / Git Bash
+docker-start.bat        # Windows
 ```
 
 ### 手动启动
@@ -90,7 +97,8 @@ cd backend && python run.py
 │   └── src/views/           # ChatView / Dashboard / KnowledgeBase / Tickets
 ├── seed_data/kb/            # 4 份种子知识库（.md）
 ├── start.bat / start.sh     # 一键启动
-├── docker-compose.yml / Dockerfile
+├── docker-compose.yml / Dockerfile / .dockerignore
+├── docker-start.sh / docker-start.bat  # Docker 一键启动
 └── 设计说明.md / Prompt日志.md / 自评反思.md
 ```
 
